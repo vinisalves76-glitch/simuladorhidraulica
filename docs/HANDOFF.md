@@ -203,3 +203,36 @@ O endpoint foi publicado e testado via GET. Antes da configuração da chave ret
 
 ### Redeploy preview após configuração do Gemini
 - Novo deploy de Preview disparado após configuração da variável `GEMINI_API_KEY` na Vercel, para que a função server-side passe a ler a chave no ambiente.
+
+
+## Reconstrução funcional em 3 fases com Gemini (30/09/2026)
+
+A integração Gemini foi evoluída para reconstruir o diagrama em etapas, reduzindo o risco de uma única resposta ampla e imprecisa.
+
+### Fluxo atual
+1. **Inventário**: Gemini identifica componentes, rótulos, posições (bbox), portas e confiança.
+2. **Topologia**: usando somente os IDs do inventário, Gemini segue as linhas externas do PDF e cria conexões porta-a-porta com path normalizado de 0 a 1000.
+3. **Funções**: Gemini associa as conexões existentes às funções hidráulicas reconhecidas (boom, arm, bucket, swing, travel, pilot, prioridades etc.) e separa pilotagem, pressão, trabalho, retorno e dreno.
+
+### Regras técnicas
+- Não criar conexão apenas para completar um circuito visual.
+- Cruzamentos sem ponto de junção não são tratados como conexão.
+- Itens incertos usam needsValidation=true.
+- Rótulos visíveis no PDF são usados como evidência, incluindo MANUAL PILOT VALVE, ARM 1/2, BUCKET, BOOM 1/2, TRAVEL LEFT/RIGHT, SWING, TRAVEL STRAIGHT, YV2/YV3/YV7 e PPC.
+- O sistema não calcula pressão, vazão ou força nesta etapa.
+
+### Interface
+- O painel Gemini mostra 3 fases de processamento.
+- A análise completa é salva em localStorage e pode ser reutilizada.
+- O botão **Gerar circuito funcional** transforma inventário + topologia + funções em grafo.
+- Conexões retornadas pela IA podem carregar um path; quando presente, o editor desenha a rota aproximando a própria linha do PDF em vez de criar apenas uma linha ortogonal genérica.
+- Linhas e componentes que exigem validação aparecem tracejados.
+- A simulação reconhece funções do mapa gerado e permite selecionar uma função hidráulica; ao ligar o fluxo, somente as connectionIds associadas à função são animadas.
+- Para grafos manuais/demonstração, a simulação 4/3 antiga continua disponível como fallback.
+
+### Deploy
+Último preview funcional: commit afb8a41987f7e6a29349337ea77c2a8074e5f406.
+A função api/analisar-diagrama.js recebeu maxDuration: 60 no vercel.json para permitir as chamadas de interpretação do PDF.
+
+### Validação pendente
+O preview mais recente está protegido por Vercel Authentication. A publicação foi concluída com status READY, mas o teste automatizado do POST completo das 3 fases não pôde ser executado pelo verificador externo nesta sessão por causa da proteção de Preview. O GET do endpoint em versão anterior já confirmou configured:true para a chave Gemini.
