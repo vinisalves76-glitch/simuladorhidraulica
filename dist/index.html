@@ -57,7 +57,22 @@
       <button id="clearClone" class="button wide" disabled>Limpar seleção</button>
       <button id="rebuildClone" class="button wide">↺ Regerar clone do PDF</button>
 
-      <div class="notice">Nesta versão de teste, o HidroLab clona o desenho vetorial e detecta automaticamente linhas por cor/conectividade geométrica. Cruzamentos, junções e lógica interna de válvulas ainda precisam de validação técnica antes de virarem uma simulação oficial.</div>
+      <div class="ai-box">
+        <div class="section-label">GEMINI AI</div>
+        <strong>Interpretar diagrama e gerar circuito</strong>
+        <p>O Gemini identifica componentes, portas e conexões visíveis. O resultado entra como proposta para validação técnica.</p>
+        <button id="analyzeGemini" class="primary wide">✦ Analisar PDF com Gemini</button>
+        <div id="aiStatus" class="ai-status">Aguardando análise.</div>
+        <div id="aiSummary" class="ai-summary" hidden>
+          <div><span>Componentes</span><strong id="aiComponents">0</strong></div>
+          <div><span>Conexões</span><strong id="aiConnections">0</strong></div>
+          <div><span>Funções</span><strong id="aiFunctions">0</strong></div>
+        </div>
+        <div id="aiWarnings" class="ai-warnings"></div>
+        <button id="buildAiGraph" class="button wide" disabled>Gerar circuito proposto</button>
+      </div>
+
+      <div class="notice">A IA não valida sozinha o circuito. Conexões incertas ficam marcadas para revisão antes de serem tratadas como modelo técnico oficial.</div>
       <button id="goBuilder" class="quiet wide">Abrir editor manual de validação</button>
     </aside>
   </section>
