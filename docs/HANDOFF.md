@@ -76,3 +76,47 @@ O snap é assistência de traçado, não reconhecimento automático de topologia
 
 ### Demonstração
 A demonstração anterior com diagonais atravessando o desenho foi removida. A demo atual é somente um pequeno traçado ortogonal para testar aderência, zoom e animação, marcado explicitamente como não funcional e não validado.
+
+
+## Editor V2 - arquitetura tipo FluidSIM (30/09/2026)
+O protótipo foi reestruturado para abandonar a ideia de uma bancada genérica independente do diagrama.
+
+### Estrutura atual
+1. **Referência PDF**: renderiza o diagrama original como fonte técnica.
+2. **Montar circuito**: editor gráfico com biblioteca de componentes hidráulicos, portas explícitas e conexões ortogonais.
+3. **Simular circuito**: reutiliza o mesmo grafo montado e anima apenas as conexões existentes.
+
+### Modelo lógico
+O circuito passou a ser armazenado como grafo:
+`componente -> porta -> conexão -> porta -> componente`.
+
+Componentes iniciais disponíveis:
+- reservatório;
+- bomba;
+- válvula direcional 4/3;
+- cilindro de dupla ação;
+- motor hidráulico;
+- válvula de alívio;
+- comando piloto.
+
+As conexões possuem classes de linha:
+- pressão/alimentação;
+- linha de trabalho;
+- retorno;
+- sucção;
+- piloto/comando;
+- dreno/auxiliar.
+
+### Simulação atual
+A válvula direcional 4/3 possui estados lógicos de demonstração:
+- avanço: P->A e B->T;
+- neutro;
+- recuo: P->B e A->T.
+
+Ao ligar a bomba, a animação percorre a topologia construída no editor. A demo incluída é genérica e didática, não representa o circuito validado da SY750H.
+
+### Limites mantidos
+Ainda não são calculados pressão, vazão, perdas, carga, dinâmica de carretel ou regulagem de bomba. O circuito real da SY750H deve ser reconstruído e validado a partir do PDF/manual antes de ser tratado como conteúdo técnico oficial.
+
+### Deploy
+A branch `feature/mapeamento-funcional` gera preview automática na Vercel. Último commit funcional do Editor V2: `738671d`.
