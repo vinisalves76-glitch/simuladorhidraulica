@@ -443,6 +443,19 @@ function orthogonalPath(a,b){
   const my=(a.y+b.y)/2;
   return 'M '+a.x+' '+a.y+' L '+a.x+' '+my+' L '+b.x+' '+my+' L '+b.x+' '+b.y;
 }
+function normalizedPath(points,editor){
+  if(!Array.isArray(points)||points.length<2)return '';
+  const w=editor.clientWidth,h=editor.clientHeight;
+  return points.map((p,i)=>{
+    const x=Math.max(0,Math.min(w,(Number(p.x)||0)/1000*w));
+    const y=Math.max(0,Math.min(h,(Number(p.y)||0)/1000*h));
+    return (i?'L ':'M ')+x+' '+y;
+  }).join(' ');
+}
+function edgePathD(edge,a,b,editor){
+  const traced=normalizedPath(edge.path,editor);
+  return traced||orthogonalPath(a,b);
+}
 function renderWires(){
   const svg=$('wireLayer');if(!svg)return;
   svg.setAttribute('viewBox','0 0 '+$('circuitEditor').clientWidth+' '+$('circuitEditor').clientHeight);
@@ -451,7 +464,10 @@ function renderWires(){
     const aNode=nodeById(edge.from.node),bNode=nodeById(edge.to.node);if(!aNode||!bNode)return;
     const a=portCenter(aNode,edge.from.port),b=portCenter(bNode,edge.to.port);
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d',orthogonalPath(a,b));path.setAttribute('class','wire '+edge.type);path.dataset.edgeId=edge.id;
+    path.setAttribute('d',edgePathD(edge,a,b,$('circuitEditor')));
+    path.setAttribute('class','wire '+edge.type+(edge.needsValidation?' needs-validation':''));
+    path.dataset.edgeId=edge.id;
+    if(edge.evidence)path.setAttribute('data-evidence',edge.evidence);
     svg.append(path);
   });
 }
@@ -493,17 +509,28 @@ function demoGraph(){
 $('loadDemoGraph').onclick=()=>{demoGraph();toast('Circuito demonstrativo carregado. Ele é genérico e não representa a SY750H.');};
 
 
-/* ---------- Gemini: PDF -> proposta de grafo ---------- */
+/* ---------- Gemini: PDF -> reconstrução funcional ---------- */
+const AI_ANALYSIS_KEY='hidrolab.ai.analysis.v3';
 let aiAnalysis=null;
 
 function setAiStatus(text,kind=''){
   const el=$('aiStatus');if(!el)return;
   el.textContent=text;el.className='ai-status'+(kind?' '+kind:'');
 }
+function setAiStep(step,state,label){
+  const row=document.querySelector('[data-ai-step="'+step+'"]');if(!row)return;
+  row.classList.remove('working','done','error');
+  if(state)row.classList.add(state);
+  const small=row.querySelector('small');if(small)small.textContent=label||({working:'Processando...',done:'Concluído',error:'Erro'}[state]||'Aguardando');
+}
+function resetAiSteps(){
+  ['inventory','topology','functions'].forEach(s=>setAiStep(s,'','Aguardando'));
+}
 function mapAiType(type){
   const map={
     pump:'pump',tank:'tank',directional_valve:'valve43',main_control_valve_section:'valve43',
-    cylinder:'cylinder',motor:'motor',relief_valve:'relief',pilot_valve:'pilot',solenoid:'pilot'
+    travel_straight_valve:'valve43',cylinder:'cylinder',motor:'motor',relief_valve:'relief',
+    pilot_valve:'pilot',pilot_manifold:'pilot',solenoid:'pilot'
   };
   return map[type]||'generic';
 }
@@ -514,8 +541,8 @@ function aiComponentToNode(comp,index){
   const ymin=Number(bbox[0])||0,xmin=Number(bbox[1])||0,ymax=Number(bbox[2])||0,xmax=Number(bbox[3])||0;
   const type=mapAiType(comp.type);
   const spec=NODE_TYPES[type]||NODE_TYPES.generic;
-  const boxW=Math.max(110,Math.min(230,(xmax-xmin)/1000*w||spec.w));
-  const boxH=Math.max(72,Math.min(150,(ymax-ymin)/1000*h||spec.h));
+  const boxW=Math.max(80,Math.min(210,(xmax-xmin)/1000*w||spec.w));
+  const boxH=Math.max(58,Math.min(135,(ymax-ymin)/1000*h||spec.h));
   return {
     id:String(comp.id||('ai_'+index)),
     sourceId:String(comp.id||('ai_'+index)),
@@ -532,10 +559,51 @@ function aiComponentToNode(comp,index){
     evidence:comp.evidence||''
   };
 }
+function updateAiSummary(){
+  if(!aiAnalysis)return;
+  const comps=aiAnalysis.inventory?.components||[];
+  const conns=aiAnalysis.topology?.connections||[];
+  const funcs=aiAnalysis.functionMap?.functions||[];
+  $('aiComponents').textContent=comps.length;
+  $('aiConnections').textContent=conns.length;
+  $('aiFunctions').textContent=funcs.length;
+  $('aiSummary').hidden=false;
+  const warnings=[
+    ...(aiAnalysis.inventory?.warnings||[]),
+    ...(aiAnalysis.topology?.warnings||[]),
+    ...(aiAnalysis.functionMap?.warnings||[])
+  ];
+  const pending=comps.filter(x=>x.needsValidation).length+
+    conns.filter(x=>x.needsValidation).length+
+    funcs.filter(x=>x.needsValidation).length;
+  if(pending)warnings.unshift(pending+' itens exigem validação técnica.');
+  $('aiWarnings').innerHTML=warnings.slice(0,8).map(w=>'<div>⚠ '+String(w).replace(/[<>]/g,'')+'</div>').join('');
+}
+function persistAiAnalysis(){
+  try{localStorage.setItem(AI_ANALYSIS_KEY,JSON.stringify(aiAnalysis));}catch{}
+  $('useLastAnalysis').hidden=false;
+}
+function restoreAiAnalysis(){
+  try{
+    const raw=localStorage.getItem(AI_ANALYSIS_KEY);if(!raw)return false;
+    aiAnalysis=JSON.parse(raw);
+    updateAiSummary();
+    setAiStep('inventory','done');
+    setAiStep('topology','done');
+    setAiStep('functions','done');
+    setAiStatus('Última análise carregada. Você pode gerar o circuito novamente.','ok');
+    $('buildAiGraph').disabled=false;
+    $('useLastAnalysis').hidden=false;
+    return true;
+  }catch{return false;}
+}
 function buildGraphFromAi(){
-  if(!aiAnalysis){toast('Execute a análise com Gemini primeiro.');return;}
-  const components=Array.isArray(aiAnalysis.components)?aiAnalysis.components:[];
-  const connections=Array.isArray(aiAnalysis.connections)?aiAnalysis.connections:[];
+  if(!aiAnalysis?.inventory){toast('Execute a análise com Gemini primeiro.');return;}
+  const inventory=aiAnalysis.inventory;
+  const topology=aiAnalysis.topology||{connections:[]};
+  const functionMap=aiAnalysis.functionMap||{functions:[]};
+  const components=Array.isArray(inventory.components)?inventory.components:[];
+  const connections=Array.isArray(topology.connections)?topology.connections:[];
   const nodes=components.map(aiComponentToNode);
   const ids=new Set(nodes.map(n=>n.id));
   const edges=connections.filter(e=>ids.has(String(e.fromComponentId))&&ids.has(String(e.toComponentId))).map((e,i)=>({
@@ -543,41 +611,67 @@ function buildGraphFromAi(){
     type:['pressure','work','return','suction','pilot','drain'].includes(e.lineType)?e.lineType:'work',
     from:{node:String(e.fromComponentId),port:String(e.fromPort||'?')},
     to:{node:String(e.toComponentId),port:String(e.toPort||'?')},
+    path:Array.isArray(e.path)?e.path:[],
     confidence:Number(e.confidence)||0,
     needsValidation:Boolean(e.needsValidation),
     evidence:e.evidence||''
   }));
-  graph={name:aiAnalysis.title||('Gemini - '+(aiAnalysis.machine||'diagrama')),nodes,edges,source:'gemini',warnings:aiAnalysis.warnings||[]};
+  graph={
+    name:inventory.title||('SY750H PRO - circuito reconstruído'),
+    nodes,edges,source:'gemini-v3',
+    warnings:[...(inventory.warnings||[]),...(topology.warnings||[])],
+    functions:Array.isArray(functionMap.functions)?functionMap.functions:[],
+    aiModel:aiAnalysis.model||''
+  };
   $('graphName').value=graph.name;
   selectedNodeId=null;selectedPort=null;
   renderGraph();
   showArea('builder');
   const pending=nodes.filter(n=>n.needsValidation).length+edges.filter(e=>e.needsValidation).length;
-  toast('Circuito proposto gerado: '+nodes.length+' componentes, '+edges.length+' conexões. '+pending+' itens pedem validação.');
+  toast('Reconstrução gerada: '+nodes.length+' componentes, '+edges.length+' conexões e '+graph.functions.length+' funções. '+pending+' itens pedem validação.');
+}
+async function postAiPhase(phase,extra={}){
+  const res=await fetch('/api/analisar-diagrama',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({phase,...extra})
+  });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok)throw new Error(data.message||data.error||('HTTP '+res.status));
+  return data;
 }
 async function analyzeWithGemini(){
   const btn=$('analyzeGemini');if(!btn)return;
-  btn.disabled=true;$('buildAiGraph').disabled=true;
-  $('aiSummary').hidden=true;$('aiWarnings').innerHTML='';
-  setAiStatus('Enviando o PDF ao Gemini e interpretando componentes/conexões...','working');
+  btn.disabled=true;$('buildAiGraph').disabled=true;$('aiSummary').hidden=true;$('aiWarnings').innerHTML='';
+  resetAiSteps();
+  aiAnalysis={model:'',inventory:null,topology:null,functionMap:null};
   try{
-    const res=await fetch('/api/analisar-diagrama',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-    const data=await res.json().catch(()=>({}));
-    if(!res.ok)throw new Error(data.message||data.error||('HTTP '+res.status));
-    aiAnalysis=data.analysis;
-    const comps=Array.isArray(aiAnalysis.components)?aiAnalysis.components:[];
-    const conns=Array.isArray(aiAnalysis.connections)?aiAnalysis.connections:[];
-    const funcs=Array.isArray(aiAnalysis.functions)?aiAnalysis.functions:[];
-    $('aiComponents').textContent=comps.length;$('aiConnections').textContent=conns.length;$('aiFunctions').textContent=funcs.length;
-    $('aiSummary').hidden=false;
-    const warnings=[...(aiAnalysis.warnings||[])];
-    const low=comps.filter(x=>(x.confidence||0)<0.75||x.needsValidation).length+conns.filter(x=>(x.confidence||0)<0.75||x.needsValidation).length;
-    if(low)warnings.unshift(low+' itens foram marcados para validação técnica.');
-    $('aiWarnings').innerHTML=warnings.slice(0,6).map(w=>'<div>⚠ '+String(w).replace(/[<>]/g,'')+'</div>').join('');
-    setAiStatus('Análise concluída com '+data.model+'. Revise antes de usar em treinamento.','ok');
+    setAiStep('inventory','working');
+    setAiStatus('Fase 1/3: identificando componentes, portas e posições...','working');
+    const inv=await postAiPhase('inventory');
+    aiAnalysis.model=inv.model;aiAnalysis.inventory=inv.inventory;
+    setAiStep('inventory','done',(inv.inventory?.components?.length||0)+' componentes');
+
+    setAiStep('topology','working');
+    setAiStatus('Fase 2/3: seguindo as linhas do esquema e reconstruindo conexões...','working');
+    const top=await postAiPhase('topology',{inventory:aiAnalysis.inventory});
+    aiAnalysis.topology=top.topology;
+    setAiStep('topology','done',(top.topology?.connections?.length||0)+' conexões');
+
+    setAiStep('functions','working');
+    setAiStatus('Fase 3/3: identificando funções hidráulicas e caminhos de fluxo...','working');
+    const fn=await postAiPhase('functions',{inventory:aiAnalysis.inventory,topology:aiAnalysis.topology});
+    aiAnalysis.functionMap=fn.functionMap;
+    setAiStep('functions','done',(fn.functionMap?.functions?.length||0)+' funções');
+
+    updateAiSummary();persistAiAnalysis();
+    setAiStatus('Reconstrução concluída com '+aiAnalysis.model+'. Gere o circuito e valide os itens sinalizados.','ok');
     $('buildAiGraph').disabled=false;
   }catch(err){
     console.error(err);
+    const steps=['inventory','topology','functions'];
+    const working=steps.find(s=>document.querySelector('[data-ai-step="'+s+'"]')?.classList.contains('working'));
+    if(working)setAiStep(working,'error','Falhou');
     setAiStatus('Falha: '+err.message,'error');
     if(String(err.message).includes('GEMINI_API_KEY_NOT_CONFIGURED')||String(err.message).includes('Configure GEMINI_API_KEY')){
       $('aiWarnings').innerHTML='<div>Cadastre a variável GEMINI_API_KEY na Vercel e faça um novo deploy.</div>';
@@ -588,6 +682,7 @@ async function analyzeWithGemini(){
 }
 $('analyzeGemini').onclick=()=>analyzeWithGemini();
 $('buildAiGraph').onclick=()=>buildGraphFromAi();
+$('useLastAnalysis').onclick=()=>{if(restoreAiAnalysis())toast('Última análise recuperada.');};
 
 /* ---------- Persistência ---------- */
 function savedGraphs(){try{return JSON.parse(localStorage.getItem(GRAPH_KEY)||'{}')}catch{return{}}}
@@ -606,17 +701,47 @@ $('saveGraph').onclick=()=>{
 $('loadGraph').onclick=()=>{const name=$('savedGraphs').value,data=savedGraphs();if(!name||!data[name])return;graph=JSON.parse(JSON.stringify(data[name]));$('graphName').value=graph.name||name;selectedNodeId=null;selectedPort=null;renderGraph();toast('Circuito carregado.');};
 $('deleteGraph').onclick=()=>{const name=$('savedGraphs').value;if(!name)return;const data=savedGraphs();delete data[name];localStorage.setItem(GRAPH_KEY,JSON.stringify(data));refreshSavedGraphs();toast('Circuito excluído.');};
 
-/* ---------- Simulação lógica ---------- */
-let simPumpOn=false,valveState='neutral';
+/* ---------- Simulação lógica / funções reconhecidas ---------- */
+let simPumpOn=false,valveState='neutral',selectedFunctionId='';
 const internalLinks={
   extend:[['P','A','pressure'],['B','T','return']],
   retract:[['P','B','pressure'],['A','T','return']],
   neutral:[]
 };
+function graphUsesAiFunctions(){
+  return graph.source==='gemini-v3'&&Array.isArray(graph.functions)&&graph.functions.length>0;
+}
+function fillFunctionSelector(){
+  const sel=$('simFunctionSelect');if(!sel)return;
+  const funcs=Array.isArray(graph.functions)?graph.functions:[];
+  sel.innerHTML='<option value="">Selecione uma função...</option>';
+  funcs.forEach(fn=>{
+    const o=document.createElement('option');
+    o.value=fn.id;o.textContent=fn.name+(fn.needsValidation?' ⚠':'');
+    sel.append(o);
+  });
+  if(funcs.length){selectedFunctionId=selectedFunctionId&&funcs.some(f=>f.id===selectedFunctionId)?selectedFunctionId:funcs[0].id;sel.value=selectedFunctionId;}
+  else selectedFunctionId='';
+  updateFunctionInfo();
+}
+function currentFunction(){
+  return (graph.functions||[]).find(f=>f.id===selectedFunctionId)||null;
+}
+function updateFunctionInfo(){
+  const info=$('simFunctionInfo');if(!info)return;
+  const fn=currentFunction();
+  if(!fn){info.textContent='Selecione uma função reconhecida pela análise.';return;}
+  info.innerHTML='<strong>'+fn.name+'</strong><span>'+String(fn.description||fn.notes||'').replace(/[<>]/g,'')+'</span>'+
+    '<small>Confiança: '+Math.round((Number(fn.confidence)||0)*100)+'%'+(fn.needsValidation?' · requer validação':'')+'</small>';
+}
 function prepareSimulation(){
   $('simGraphName').textContent=graph.name||'Circuito em desenvolvimento';
   simPumpOn=false;valveState='neutral';
   $('simPump').classList.remove('on');$('simPump').setAttribute('aria-pressed','false');$('pumpState').textContent='Desligada';
+  const aiMode=graphUsesAiFunctions();
+  $('aiFunctionControls').hidden=!aiMode;
+  $('genericValveControls').hidden=aiMode;
+  if(aiMode)fillFunctionSelector();
   document.querySelectorAll('[data-valve-state]').forEach(b=>b.classList.toggle('chosen',b.dataset.valveState==='neutral'));
   renderSimGraph();
 }
@@ -624,30 +749,45 @@ function simPortCenter(node,port){
   const p=portCenter(node,port);
   return{x:p.x,y:p.y};
 }
+function functionEdgeStates(){
+  const result=new Map(),fn=currentFunction();
+  if(!simPumpOn||!fn)return result;
+  const groups=[
+    ['pilotConnectionIds','pilot'],
+    ['pressureConnectionIds','pressure'],
+    ['workConnectionIds','pressure'],
+    ['returnConnectionIds','return'],
+    ['drainConnectionIds','return']
+  ];
+  groups.forEach(([key,state])=>(fn[key]||[]).forEach(id=>result.set(String(id),state)));
+  return result;
+}
 function renderSimGraph(){
   const layer=$('simNodeLayer'),svg=$('simWireLayer');if(!layer||!svg)return;
   layer.innerHTML='';svg.innerHTML='';
   svg.setAttribute('viewBox','0 0 '+$('simEditor').clientWidth+' '+$('simEditor').clientHeight);
   graph.nodes.forEach(n=>{
-    const el=document.createElement('div');el.className='hyd-node sim-node';el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.width=n.w+'px';el.style.height=n.h+'px';
+    const el=document.createElement('div');
+    el.className='hyd-node sim-node'+(n.needsValidation?' needs-validation':'');
+    el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.width=n.w+'px';el.style.height=n.h+'px';
     el.innerHTML='<div class="node-title">'+n.label+'</div><div class="node-symbol">'+nodeSymbol(n.type)+'</div>';
     layer.append(el);
   });
-  const active=computeActiveEdges();
+  const active=graphUsesAiFunctions()?functionEdgeStates():computeGenericActiveEdges();
   graph.edges.forEach(edge=>{
     const a=nodeById(edge.from.node),b=nodeById(edge.to.node);if(!a||!b)return;
     const pa=simPortCenter(a,edge.from.port),pb=simPortCenter(b,edge.to.port);
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d',orthogonalPath(pa,pb));
-    const state=active.get(edge.id);
-    path.setAttribute('class','wire sim-wire '+edge.type+(state?' active '+state:''));
+    path.setAttribute('d',edgePathD(edge,pa,pb,$('simEditor')));
+    const state=active.get(String(edge.id));
+    path.setAttribute('class','wire sim-wire '+edge.type+(state?' active '+state:'')+(edge.needsValidation?' needs-validation':''));
     svg.append(path);
   });
-  const pressure=[...active.values()].filter(v=>v==='pressure').length;
+  const pressure=[...active.values()].filter(v=>v==='pressure'||v==='pilot').length;
   const ret=[...active.values()].filter(v=>v==='return').length;
   $('pressureReadout').textContent=pressure;$('returnReadout').textContent=ret;
 }
-function computeActiveEdges(){
+function computeGenericActiveEdges(){
   const result=new Map();
   if(!simPumpOn)return result;
   const valve=graph.nodes.find(n=>n.type==='valve43');
@@ -661,13 +801,10 @@ function computeActiveEdges(){
     adjacency.get(a).push({to:b,kind,edgeId});
     adjacency.get(b).push({to:a,kind,edgeId});
   }
-  graph.edges.forEach(e=>connect(portKey(e.from.node,e.from.port),portKey(e.to.node,e.to.port),e.type,e.id));
-  if(valve){
-    internalLinks[valveState].forEach(([a,b,kind])=>connect(portKey(valve.id,a),portKey(valve.id,b),kind,'internal:'+a+b));
-  }
+  graph.edges.forEach(e=>connect(portKey(e.from.node,e.from.port),portKey(e.to.node,e.to.port),e.type,String(e.id)));
+  if(valve)internalLinks[valveState].forEach(([a,b,kind])=>connect(portKey(valve.id,a),portKey(valve.id,b),kind,'internal:'+a+b));
 
-  const source=portKey(pump.id,'P');
-  const visited=new Set([source]);const q=[source];
+  const source=portKey(pump.id,'P'),visited=new Set([source]),q=[source];
   while(q.length){
     const cur=q.shift();
     for(const link of adjacency.get(cur)||[]){
@@ -678,9 +815,7 @@ function computeActiveEdges(){
       if(!visited.has(link.to)){visited.add(link.to);q.push(link.to);}
     }
   }
-
-  const tank=graph.nodes.find(n=>n.type==='tank');
-  if(tank&&valve){
+  if(valve){
     internalLinks[valveState].filter(x=>x[2]==='return').forEach(([a,b])=>{
       const start=portKey(valve.id,b),seen=new Set([start]),qq=[start];
       while(qq.length){
@@ -695,13 +830,26 @@ function computeActiveEdges(){
   return result;
 }
 $('simFit').onclick=()=>{$('simEditor').parentElement.scrollTo(0,0);};
-$('simPump').onclick=()=>{simPumpOn=!simPumpOn;$('simPump').classList.toggle('on',simPumpOn);$('simPump').setAttribute('aria-pressed',simPumpOn);$('pumpState').textContent=simPumpOn?'Ligada':'Desligada';renderSimGraph();};
-document.querySelectorAll('[data-valve-state]').forEach(btn=>btn.onclick=()=>{valveState=btn.dataset.valveState;document.querySelectorAll('[data-valve-state]').forEach(b=>b.classList.toggle('chosen',b===btn));renderSimGraph();});
+$('simPump').onclick=()=>{
+  if(graphUsesAiFunctions()&&!currentFunction()){toast('Selecione uma função hidráulica.');return;}
+  simPumpOn=!simPumpOn;
+  $('simPump').classList.toggle('on',simPumpOn);
+  $('simPump').setAttribute('aria-pressed',simPumpOn);
+  $('pumpState').textContent=simPumpOn?'Fluxo ativo':'Desligada';
+  renderSimGraph();
+};
+$('simFunctionSelect').onchange=e=>{selectedFunctionId=e.target.value;updateFunctionInfo();renderSimGraph();};
+document.querySelectorAll('[data-valve-state]').forEach(btn=>btn.onclick=()=>{
+  valveState=btn.dataset.valveState;
+  document.querySelectorAll('[data-valve-state]').forEach(b=>b.classList.toggle('chosen',b===btn));
+  renderSimGraph();
+});
 
 /* ---------- Inicialização ---------- */
 refreshSavedGraphs();
 graph={name:'Circuito em desenvolvimento',nodes:[],edges:[]};
 $('graphName').value=graph.name;
 renderGraph();
+restoreAiAnalysis();
 renderReference();
 showArea('reference');
