@@ -26,3 +26,9 @@
 .mapline button{padding:2px 7px;font-size:18px;border:0;background:transparent;color:#94a3b8}
 @media(max-width:1050px){#mapViewport{height:560px}.mapactions{grid-template-columns:1fr}.mapactions.two{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){#mapViewport{height:420px}.mapactions,.mapactions.two{grid-template-columns:1fr 1fr}.mapactions button:first-child{grid-column:1/-1}}
+
+#mapCanvas,#mapFallback{width:100%;height:auto;display:block;user-select:none;pointer-events:none;background:#fff}
+#mapDrawing{min-height:1px}
+.demo-note{margin:12px 0 4px;padding:10px 12px;border:1px solid #f2d08a;background:#fff8e8;border-radius:7px}
+.demo-note strong{display:block;font-size:12px;color:#8a5a00;margin-bottom:3px}
+.demo-note span{display:block;font-size:11px;line-height:1.4;color:#7a6848}
