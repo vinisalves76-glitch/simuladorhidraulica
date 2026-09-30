@@ -199,3 +199,7 @@ O circuito proposto é montado no editor a partir do JSON da IA. Componentes nã
 ### Verificação
 O endpoint foi publicado e testado via GET. Antes da configuração da chave retorna:
 `{"configured":false,"model":"gemini-2.5-flash"}`.
+
+
+### Redeploy preview após configuração do Gemini
+- Novo deploy de Preview disparado após configuração da variável `GEMINI_API_KEY` na Vercel, para que a função server-side passe a ler a chave no ambiente.
