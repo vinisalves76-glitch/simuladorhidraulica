@@ -261,7 +261,8 @@ const NODE_TYPES={
   cylinder:{label:'Cilindro D.A.',ports:[['A','in'],['B','in']],w:184,h:92},
   motor:{label:'Motor hidráulico',ports:[['A','in'],['B','out']],w:154,h:92},
   relief:{label:'Válvula de alívio',ports:[['P','in'],['T','out']],w:160,h:92},
-  pilot:{label:'Comando piloto',ports:[['P','in'],['X','out']],w:160,h:92}
+  pilot:{label:'Comando piloto',ports:[['P','in'],['X','out']],w:160,h:92},
+  generic:{label:'Componente detectado',ports:[],w:160,h:84}
 };
 const edgeColors={pressure:'#ef4444',work:'#ef4444',return:'#0ea5e9',suction:'#0f766e',pilot:'#d946ef',drain:'#f59e0b'};
 
@@ -310,20 +311,21 @@ function renderGraph(){
   const layer=$('nodeLayer');
   layer.innerHTML='';
   graph.nodes.forEach(node=>{
-    const spec=NODE_TYPES[node.type];
+    const spec=NODE_TYPES[node.type]||NODE_TYPES.generic;
+    const nodePorts=(Array.isArray(node.ports)&&node.ports.length?node.ports.map(p=>[p.name||'?','io']):spec.ports);
     const el=document.createElement('div');
     el.className='hyd-node'+(node.id===selectedNodeId?' selected':'');
     el.dataset.nodeId=node.id;
     el.style.left=node.x+'px';el.style.top=node.y+'px';el.style.width=node.w+'px';el.style.height=node.h+'px';
     el.innerHTML='<div class="node-title">'+node.label+'</div><div class="node-symbol">'+nodeSymbol(node.type)+'</div>';
-    spec.ports.forEach(([p,dir],i)=>{
+    nodePorts.forEach(([p,dir],i)=>{
       const port=document.createElement('button');
       port.type='button';port.className='port '+dir;
       port.dataset.node=node.id;port.dataset.port=p;
       port.title=node.label+' - porta '+p;
-      const side=portSide(node.type,p,i);
+      const side=portSide(node.type,p,i,nodePorts.length);
       port.classList.add(side);
-      const pos=portPositionStyle(node.type,p,i,spec.ports.length,side);
+      const pos=portPositionStyle(node.type,p,i,nodePorts.length,side);
       Object.assign(port.style,pos);
       port.innerHTML='<span>'+p+'</span>';
       if(selectedPort&&selectedPort.node===node.id&&selectedPort.port===p)port.classList.add('pending');
@@ -342,7 +344,7 @@ function renderGraph(){
   requestAnimationFrame(renderWires);
 }
 
-function portSide(type,p,i){
+function portSide(type,p,i,total){
   if(type==='pump')return p==='S'?'left':'right';
   if(type==='tank')return 'top';
   if(type==='valve43')return (p==='P'||p==='T')?'bottom':'top';
@@ -350,6 +352,7 @@ function portSide(type,p,i){
   if(type==='motor')return p==='A'?'left':'right';
   if(type==='relief')return p==='P'?'left':'right';
   if(type==='pilot')return p==='P'?'left':'right';
+  if(type==='generic')return i%2?'right':'left';
   return i%2?'right':'left';
 }
 function portPositionStyle(type,p,i,total,side){
@@ -369,7 +372,9 @@ function selectNode(id){
 function renderInspector(){
   const n=nodeById(selectedNodeId);
   $('selectedTitle').textContent=n?n.label:'Nenhum componente selecionado';
-  $('selectedMeta').textContent=n?NODE_TYPES[n.type].label+' · '+NODE_TYPES[n.type].ports.map(p=>p[0]).join(' / '):'Clique em um componente para editar.';
+  const ns=n?(NODE_TYPES[n.type]||NODE_TYPES.generic):null;
+  const np=n?(Array.isArray(n.ports)&&n.ports.length?n.ports.map(p=>p.name||'?'):ns.ports.map(p=>p[0])):[];
+  $('selectedMeta').textContent=n?ns.label+' · '+np.join(' / '):'Clique em um componente para editar.';
   $('nodeLabel').disabled=!n;$('applyNodeLabel').disabled=!n;$('deleteNode').disabled=!n;
   $('nodeLabel').value=n?n.label:'';
 }
@@ -418,8 +423,10 @@ function dragEnd(e){
 }
 
 function portCenter(node,port){
-  const spec=NODE_TYPES[node.type],entry=spec.ports.findIndex(p=>p[0]===port),side=portSide(node.type,port,entry);
-  const style=portPositionStyle(node.type,port,entry,spec.ports.length,side);
+  const spec=NODE_TYPES[node.type]||NODE_TYPES.generic;
+  const nodePorts=(Array.isArray(node.ports)&&node.ports.length?node.ports.map(p=>[p.name||'?','io']):spec.ports);
+  const entry=Math.max(0,nodePorts.findIndex(p=>p[0]===port)),side=portSide(node.type,port,entry,nodePorts.length);
+  const style=portPositionStyle(node.type,port,entry,nodePorts.length,side);
   let x=node.x,y=node.y;
   if(side==='left'){x=node.x;y=node.y+parseFloat(style.top)/100*node.h;}
   if(side==='right'){x=node.x+node.w;y=node.y+parseFloat(style.top)/100*node.h;}
@@ -484,6 +491,103 @@ function demoGraph(){
   $('graphName').value=graph.name;
 }
 $('loadDemoGraph').onclick=()=>{demoGraph();toast('Circuito demonstrativo carregado. Ele é genérico e não representa a SY750H.');};
+
+
+/* ---------- Gemini: PDF -> proposta de grafo ---------- */
+let aiAnalysis=null;
+
+function setAiStatus(text,kind=''){
+  const el=$('aiStatus');if(!el)return;
+  el.textContent=text;el.className='ai-status'+(kind?' '+kind:'');
+}
+function mapAiType(type){
+  const map={
+    pump:'pump',tank:'tank',directional_valve:'valve43',main_control_valve_section:'valve43',
+    cylinder:'cylinder',motor:'motor',relief_valve:'relief',pilot_valve:'pilot',solenoid:'pilot'
+  };
+  return map[type]||'generic';
+}
+function aiComponentToNode(comp,index){
+  const editor=$('circuitEditor');
+  const w=Math.max(editor.clientWidth,1100),h=Math.max(editor.clientHeight,650);
+  const bbox=Array.isArray(comp.bbox)&&comp.bbox.length===4?comp.bbox:[80,80,160,160];
+  const ymin=Number(bbox[0])||0,xmin=Number(bbox[1])||0,ymax=Number(bbox[2])||0,xmax=Number(bbox[3])||0;
+  const type=mapAiType(comp.type);
+  const spec=NODE_TYPES[type]||NODE_TYPES.generic;
+  const boxW=Math.max(110,Math.min(230,(xmax-xmin)/1000*w||spec.w));
+  const boxH=Math.max(72,Math.min(150,(ymax-ymin)/1000*h||spec.h));
+  return {
+    id:String(comp.id||('ai_'+index)),
+    sourceId:String(comp.id||('ai_'+index)),
+    type,
+    aiType:comp.type||'unknown',
+    label:comp.label||comp.type||('Componente '+(index+1)),
+    x:Math.max(4,xmin/1000*w),
+    y:Math.max(4,ymin/1000*h),
+    w:boxW,
+    h:boxH,
+    ports:Array.isArray(comp.ports)?comp.ports:[],
+    confidence:Number(comp.confidence)||0,
+    needsValidation:Boolean(comp.needsValidation),
+    evidence:comp.evidence||''
+  };
+}
+function buildGraphFromAi(){
+  if(!aiAnalysis){toast('Execute a análise com Gemini primeiro.');return;}
+  const components=Array.isArray(aiAnalysis.components)?aiAnalysis.components:[];
+  const connections=Array.isArray(aiAnalysis.connections)?aiAnalysis.connections:[];
+  const nodes=components.map(aiComponentToNode);
+  const ids=new Set(nodes.map(n=>n.id));
+  const edges=connections.filter(e=>ids.has(String(e.fromComponentId))&&ids.has(String(e.toComponentId))).map((e,i)=>({
+    id:String(e.id||('ai_edge_'+i)),
+    type:['pressure','work','return','suction','pilot','drain'].includes(e.lineType)?e.lineType:'work',
+    from:{node:String(e.fromComponentId),port:String(e.fromPort||'?')},
+    to:{node:String(e.toComponentId),port:String(e.toPort||'?')},
+    confidence:Number(e.confidence)||0,
+    needsValidation:Boolean(e.needsValidation),
+    evidence:e.evidence||''
+  }));
+  graph={name:aiAnalysis.title||('Gemini - '+(aiAnalysis.machine||'diagrama')),nodes,edges,source:'gemini',warnings:aiAnalysis.warnings||[]};
+  $('graphName').value=graph.name;
+  selectedNodeId=null;selectedPort=null;
+  renderGraph();
+  showArea('builder');
+  const pending=nodes.filter(n=>n.needsValidation).length+edges.filter(e=>e.needsValidation).length;
+  toast('Circuito proposto gerado: '+nodes.length+' componentes, '+edges.length+' conexões. '+pending+' itens pedem validação.');
+}
+async function analyzeWithGemini(){
+  const btn=$('analyzeGemini');if(!btn)return;
+  btn.disabled=true;$('buildAiGraph').disabled=true;
+  $('aiSummary').hidden=true;$('aiWarnings').innerHTML='';
+  setAiStatus('Enviando o PDF ao Gemini e interpretando componentes/conexões...','working');
+  try{
+    const res=await fetch('/api/analisar-diagrama',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.message||data.error||('HTTP '+res.status));
+    aiAnalysis=data.analysis;
+    const comps=Array.isArray(aiAnalysis.components)?aiAnalysis.components:[];
+    const conns=Array.isArray(aiAnalysis.connections)?aiAnalysis.connections:[];
+    const funcs=Array.isArray(aiAnalysis.functions)?aiAnalysis.functions:[];
+    $('aiComponents').textContent=comps.length;$('aiConnections').textContent=conns.length;$('aiFunctions').textContent=funcs.length;
+    $('aiSummary').hidden=false;
+    const warnings=[...(aiAnalysis.warnings||[])];
+    const low=comps.filter(x=>(x.confidence||0)<0.75||x.needsValidation).length+conns.filter(x=>(x.confidence||0)<0.75||x.needsValidation).length;
+    if(low)warnings.unshift(low+' itens foram marcados para validação técnica.');
+    $('aiWarnings').innerHTML=warnings.slice(0,6).map(w=>'<div>⚠ '+String(w).replace(/[<>]/g,'')+'</div>').join('');
+    setAiStatus('Análise concluída com '+data.model+'. Revise antes de usar em treinamento.','ok');
+    $('buildAiGraph').disabled=false;
+  }catch(err){
+    console.error(err);
+    setAiStatus('Falha: '+err.message,'error');
+    if(String(err.message).includes('GEMINI_API_KEY_NOT_CONFIGURED')||String(err.message).includes('Configure GEMINI_API_KEY')){
+      $('aiWarnings').innerHTML='<div>Cadastre a variável GEMINI_API_KEY na Vercel e faça um novo deploy.</div>';
+    }
+  }finally{
+    btn.disabled=false;
+  }
+}
+$('analyzeGemini').onclick=()=>analyzeWithGemini();
+$('buildAiGraph').onclick=()=>buildGraphFromAi();
 
 /* ---------- Persistência ---------- */
 function savedGraphs(){try{return JSON.parse(localStorage.getItem(GRAPH_KEY)||'{}')}catch{return{}}}
