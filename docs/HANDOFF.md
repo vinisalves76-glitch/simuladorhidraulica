@@ -56,3 +56,23 @@ Usar o editor junto com o instrutor para mapear uma função completa da SY750H,
 - Adicionado um mapeamento DEMO, explicitamente marcado como **não validado**, para testar criação de linhas, animação de fluxo, salvamento e interface.
 - Adicionado botão para recarregar a demonstração.
 - O mapa demo é somente visual e não deve ser usado como referência técnica da SY750H.
+
+
+## Evolução - abordagem tipo FluidSIM
+Após comparar o comportamento desejado com o conceito do FluidSIM, o HidroLab deixou de tratar a "bancada didática genérica" como simulador principal da máquina.
+
+### Nova arquitetura funcional
+- O PDF continua sendo a referência visual original da SY750H.
+- O editor cria uma camada vetorial por cima do diagrama.
+- Os trajetos são polilinhas conectadas, e não linhas diagonais livres.
+- Foi adicionado "ímã nas linhas do diagrama": o clique procura o traço impresso mais próximo no canvas renderizado do PDF.
+- Foi adicionado modo ortogonal (90 graus), adequado ao padrão predominante de diagramas hidráulicos.
+- A aba "Bancada didática" foi substituída por **Simular função**.
+- A simulação usa exatamente o mesmo mapa vetorial criado sobre o diagrama; portanto, sem rota mapeada não existe fluxo animado.
+- A animação pode mostrar fluxo completo ou filtrar pressão, retorno, piloto e dreno.
+
+### Limite atual
+O snap é assistência de traçado, não reconhecimento automático de topologia. Para reproduzir uma função real com fidelidade, cada conexão, porta e desvio deve ser validado e mapeado no esquema. O próximo avanço técnico é evoluir de polilinhas assistidas para um grafo de componentes/portas/conexões, aproximando a lógica interna de um simulador de circuitos.
+
+### Demonstração
+A demonstração anterior com diagonais atravessando o desenho foi removida. A demo atual é somente um pequeno traçado ortogonal para testar aderência, zoom e animação, marcado explicitamente como não funcional e não validado.
