@@ -30,7 +30,7 @@ $('showReference').onclick=()=>showArea('reference');
 $('backToBuilder').onclick=()=>showArea('builder');
 
 /* ---------- PDF de referência ---------- */
-let pdfUrl='sy750h.pdf',pdfBlobUrl=null,refScale=1;
+let pdfUrl='sy750h.pdf',pdfBlobUrl=null,refScale=1,pdfPageSize={w:2200,h:1200},builderPdfVisible=true,simPdfVisible=true;
 async function renderReference(){
   const canvas=$('refCanvas');
   try{
@@ -43,8 +43,10 @@ async function renderReference(){
     const viewport=page.getViewport({scale:targetWidth/base.width});
     canvas.width=Math.round(viewport.width);
     canvas.height=Math.round(viewport.height);
+    pdfPageSize={w:canvas.width,h:canvas.height};
     await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
     applyRefScale();
+    await renderPdfBackgrounds();
   }catch(err){
     console.error(err);
     toast('Não foi possível renderizar o PDF de referência.');
@@ -72,6 +74,40 @@ $('pdfFile').onchange=async e=>{
   await renderReference();
   showArea('reference');
 };
+async function renderPdfToCanvas(targetId){
+  const canvas=$(targetId);if(!canvas)return;
+  try{
+    const pdf=await window.pdfjsLib.getDocument(pdfUrl).promise;
+    const page=await pdf.getPage(1);
+    const base=page.getViewport({scale:1});
+    const targetWidth=2200;
+    const viewport=page.getViewport({scale:targetWidth/base.width});
+    canvas.width=Math.round(viewport.width);
+    canvas.height=Math.round(viewport.height);
+    await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+  }catch(err){
+    console.warn('Falha ao renderizar PDF no canvas '+targetId,err);
+  }
+}
+async function renderPdfBackgrounds(){
+  await Promise.all([renderPdfToCanvas('builderPdfCanvas'),renderPdfToCanvas('simPdfCanvas')]);
+  syncWorkspaceSize();
+}
+function syncWorkspaceSize(){
+  const ratio=pdfPageSize.h/pdfPageSize.w;
+  const builder=$('circuitEditor'),sim=$('simEditor');
+  [builder,sim].forEach(el=>{
+    if(!el)return;
+    const width=Math.max(el.parentElement?.clientWidth||1100,1100);
+    el.style.width=width+'px';
+    el.style.height=Math.round(width*ratio)+'px';
+  });
+  renderGraph();
+  renderSimGraph();
+}
+$('togglePdfBg').onclick=()=>{builderPdfVisible=!builderPdfVisible;$('builderPdfCanvas').hidden=!builderPdfVisible;$('togglePdfBg').textContent=builderPdfVisible?'Ocultar PDF':'Mostrar PDF';};
+$('toggleSimPdf').onclick=()=>{simPdfVisible=!simPdfVisible;$('simPdfCanvas').hidden=!simPdfVisible;$('toggleSimPdf').textContent=simPdfVisible?'Ocultar PDF':'Mostrar PDF';};
+
 
 /* ---------- Modelo gráfico ---------- */
 const GRAPH_KEY='hidrolab.graphs.v2';
@@ -269,7 +305,7 @@ function renderWires(){
     svg.append(path);
   });
 }
-window.addEventListener('resize',()=>{renderWires();renderSimGraph();});
+window.addEventListener('resize',()=>{syncWorkspaceSize();renderWires();renderSimGraph();});
 
 function renderEdgeList(){
   const box=$('edgeList');box.innerHTML='';
@@ -283,7 +319,7 @@ function renderEdgeList(){
 }
 
 $('builderClear').onclick=()=>{graph={name:'Circuito em desenvolvimento',nodes:[],edges:[]};selectedNodeId=null;selectedPort=null;nodeSeq=1;renderGraph();};
-$('builderFit').onclick=()=>{if(!graph.nodes.length)return;const minX=Math.min(...graph.nodes.map(n=>n.x)),minY=Math.min(...graph.nodes.map(n=>n.y));graph.nodes.forEach(n=>{n.x=n.x-minX+40;n.y=n.y-minY+45;});renderGraph();};
+$('builderFit').onclick=()=>{if(!graph.nodes.length){$('circuitEditor').parentElement.scrollTo(0,0);return;}const minX=Math.min(...graph.nodes.map(n=>n.x)),minY=Math.min(...graph.nodes.map(n=>n.y));graph.nodes.forEach(n=>{n.x=n.x-minX+40;n.y=n.y-minY+45;});renderGraph();$('circuitEditor').parentElement.scrollTo(0,0);};
 
 function demoGraph(){
   nodeSeq=1;
@@ -338,20 +374,15 @@ function prepareSimulation(){
   renderSimGraph();
 }
 function simPortCenter(node,port){
-  const editor=$('simEditor');
-  const sx=editor.clientWidth/$('circuitEditor').clientWidth;
-  const sy=editor.clientHeight/$('circuitEditor').clientHeight;
   const p=portCenter(node,port);
-  return{x:p.x*sx,y:p.y*sy};
+  return{x:p.x,y:p.y};
 }
 function renderSimGraph(){
   const layer=$('simNodeLayer'),svg=$('simWireLayer');if(!layer||!svg)return;
   layer.innerHTML='';svg.innerHTML='';
   svg.setAttribute('viewBox','0 0 '+$('simEditor').clientWidth+' '+$('simEditor').clientHeight);
-  const sx=$('simEditor').clientWidth/$('circuitEditor').clientWidth;
-  const sy=$('simEditor').clientHeight/$('circuitEditor').clientHeight;
   graph.nodes.forEach(n=>{
-    const el=document.createElement('div');el.className='hyd-node sim-node';el.style.left=(n.x*sx)+'px';el.style.top=(n.y*sy)+'px';el.style.width=(n.w*sx)+'px';el.style.height=(n.h*sy)+'px';
+    const el=document.createElement('div');el.className='hyd-node sim-node';el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.width=n.w+'px';el.style.height=n.h+'px';
     el.innerHTML='<div class="node-title">'+n.label+'</div><div class="node-symbol">'+nodeSymbol(n.type)+'</div>';
     layer.append(el);
   });
@@ -416,11 +447,14 @@ function computeActiveEdges(){
   }
   return result;
 }
+$('simFit').onclick=()=>{$('simEditor').parentElement.scrollTo(0,0);};
 $('simPump').onclick=()=>{simPumpOn=!simPumpOn;$('simPump').classList.toggle('on',simPumpOn);$('simPump').setAttribute('aria-pressed',simPumpOn);$('pumpState').textContent=simPumpOn?'Ligada':'Desligada';renderSimGraph();};
 document.querySelectorAll('[data-valve-state]').forEach(btn=>btn.onclick=()=>{valveState=btn.dataset.valveState;document.querySelectorAll('[data-valve-state]').forEach(b=>b.classList.toggle('chosen',b===btn));renderSimGraph();});
 
 /* ---------- Inicialização ---------- */
 refreshSavedGraphs();
-demoGraph();
+graph={name:'Circuito em desenvolvimento',nodes:[],edges:[]};
+$('graphName').value=graph.name;
+renderGraph();
 renderReference();
 showArea('reference');
