@@ -31,9 +31,145 @@ $('backToBuilder').onclick=()=>showArea('builder');
 
 /* ---------- PDF de referência ---------- */
 let pdfUrl='sy750h.pdf',pdfBlobUrl=null,refScale=1,pdfPageSize={w:2200,h:1200},builderPdfVisible=true,simPdfVisible=true;
+const clonePalette=[
+  {key:'red',name:'Rede vermelha',rgb:[255,0,0],hex:'#ff0000'},
+  {key:'cyan',name:'Rede azul-claro',rgb:[0,191,255],hex:'#00bfff'},
+  {key:'magenta',name:'Rede magenta',rgb:[255,0,255],hex:'#ff00ff'},
+  {key:'orange',name:'Rede laranja',rgb:[204,102,0],hex:'#cc6600'},
+  {key:'pink',name:'Rede rosa',rgb:[255,0,64],hex:'#ff0040'},
+  {key:'blue',name:'Rede azul',rgb:[0,0,255],hex:'#0000ff'},
+  {key:'teal',name:'Rede verde-azulada',rgb:[0,102,102],hex:'#006666'},
+  {key:'green',name:'Rede verde',rgb:[0,255,0],hex:'#00ff00'}
+];
+let cloneImageData=null,cloneSelectedPixels=[],cloneSelectedColor=null,cloneAnimating=false;
+
+function nearestCloneColor(r,g,b,maxDistance=115){
+  let best=null,bestD=maxDistance*maxDistance;
+  for(const p of clonePalette){
+    const dr=r-p.rgb[0],dg=g-p.rgb[1],db=b-p.rgb[2],d=dr*dr+dg*dg+db*db;
+    if(d<bestD){bestD=d;best=p;}
+  }
+  return best;
+}
+function clonePixelColor(data,idx){
+  return nearestCloneColor(data[idx],data[idx+1],data[idx+2]);
+}
+function prepareCloneOverlay(){
+  const src=$('refCanvas'),ov=$('cloneOverlay');
+  ov.width=src.width;ov.height=src.height;
+  ov.style.width='100%';ov.style.height='100%';
+  cloneImageData=src.getContext('2d',{willReadFrequently:true}).getImageData(0,0,src.width,src.height);
+  cloneSelectedPixels=[];cloneSelectedColor=null;clearCloneOverlay();
+}
+function detectCloneColors(){
+  if(!cloneImageData)return [];
+  const data=cloneImageData.data,w=$('refCanvas').width,h=$('refCanvas').height,counts=new Map();
+  for(let y=0;y<h;y+=5){
+    for(let x=0;x<w;x+=5){
+      const i=(y*w+x)*4,p=clonePixelColor(data,i);
+      if(p)counts.set(p.key,(counts.get(p.key)||0)+1);
+    }
+  }
+  return clonePalette.filter(p=>counts.has(p.key)).map(p=>({...p,count:counts.get(p.key)}));
+}
+function clearCloneOverlay(){
+  const ov=$('cloneOverlay');if(!ov)return;
+  const ctx=ov.getContext('2d');ctx.clearRect(0,0,ov.width,ov.height);
+  ov.classList.remove('flowing');
+}
+function paintClonePixels(pixels,color='rgba(255,215,0,.78)',limit=pixels.length){
+  const ov=$('cloneOverlay'),ctx=ov.getContext('2d');
+  ctx.clearRect(0,0,ov.width,ov.height);
+  ctx.fillStyle=color;
+  const upto=Math.min(limit,pixels.length);
+  for(let i=0;i<upto;i++){const p=pixels[i];ctx.fillRect(p[0]-1,p[1]-1,3,3);}
+}
+function findColoredSeed(x,y){
+  if(!cloneImageData)return null;
+  const data=cloneImageData.data,w=$('refCanvas').width,h=$('refCanvas').height;
+  for(let radius=0;radius<=18;radius++){
+    for(let dy=-radius;dy<=radius;dy++){
+      for(let dx=-radius;dx<=radius;dx++){
+        if(Math.abs(dx)!==radius&&Math.abs(dy)!==radius)continue;
+        const xx=Math.round(x+dx),yy=Math.round(y+dy);
+        if(xx<0||yy<0||xx>=w||yy>=h)continue;
+        const idx=(yy*w+xx)*4,p=clonePixelColor(data,idx);
+        if(p)return{x:xx,y:yy,palette:p};
+      }
+    }
+  }
+  return null;
+}
+function traceCloneNetwork(seed,maxPixels=180000){
+  const src=$('refCanvas'),w=src.width,h=src.height,data=cloneImageData.data;
+  const target=seed.palette.key,visited=new Uint8Array(w*h),queueX=new Int32Array(maxPixels),queueY=new Int32Array(maxPixels);
+  let head=0,tail=0;queueX[tail]=seed.x;queueY[tail]=seed.y;tail++;
+  const pixels=[];
+  const neighbors=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
+  while(head<tail&&pixels.length<maxPixels){
+    const x=queueX[head],y=queueY[head];head++;
+    const pos=y*w+x;if(visited[pos])continue;visited[pos]=1;
+    const idx=pos*4,p=clonePixelColor(data,idx);
+    if(!p||p.key!==target)continue;
+    pixels.push([x,y]);
+    for(const [dx,dy] of neighbors){
+      const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=w||ny>=h)continue;
+      const np=ny*w+nx;if(!visited[np]&&tail<maxPixels){queueX[tail]=nx;queueY[tail]=ny;tail++;}
+    }
+  }
+  return pixels;
+}
+function selectCloneAt(clientX,clientY){
+  const ov=$('cloneOverlay'),rect=ov.getBoundingClientRect();
+  const x=(clientX-rect.left)/rect.width*ov.width,y=(clientY-rect.top)/rect.height*ov.height;
+  const seed=findColoredSeed(x,y);
+  if(!seed){toast('Clique mais perto de uma linha colorida do esquema.');return;}
+  cloneSelectedColor=seed.palette;
+  cloneSelectedPixels=traceCloneNetwork(seed);
+  paintClonePixels(cloneSelectedPixels);
+  $('cloneSelectedTitle').textContent=seed.palette.name;
+  $('cloneSelectedMeta').textContent=cloneSelectedPixels.length.toLocaleString('pt-BR')+' pixels conectados detectados a partir do ponto selecionado.';
+  $('traceClone').disabled=false;$('animateClone').disabled=false;$('clearClone').disabled=false;
+}
+function runCloneAnimation(){
+  if(!cloneSelectedPixels.length||cloneAnimating)return;
+  cloneAnimating=true;let shown=0;
+  const step=()=>{
+    if(!cloneAnimating)return;
+    shown=Math.min(cloneSelectedPixels.length,shown+Math.max(250,Math.floor(cloneSelectedPixels.length/90)));
+    paintClonePixels(cloneSelectedPixels,'rgba(255,215,0,.88)',shown);
+    if(shown<cloneSelectedPixels.length)requestAnimationFrame(step);
+    else{cloneAnimating=false;$('cloneOverlay').classList.add('flowing');}
+  };
+  clearCloneOverlay();requestAnimationFrame(step);
+}
+async function initializeClone(page){
+  const ov=$('cloneOverlay');
+  prepareCloneOverlay();
+  const [textContent,opList]=await Promise.all([page.getTextContent(),page.getOperatorList()]);
+  const vectorCount=opList.fnArray.filter(fn=>fn===window.pdfjsLib.OPS.constructPath).length;
+  const colors=detectCloneColors();
+  $('cloneObjectCount').textContent=vectorCount.toLocaleString('pt-BR');
+  $('cloneTextCount').textContent=textContent.items.length.toLocaleString('pt-BR');
+  $('cloneColorCount').textContent=colors.length;
+  const legend=$('cloneLegend');legend.innerHTML='';
+  colors.forEach(p=>{
+    const row=document.createElement('button');row.className='clone-color-row';
+    row.innerHTML='<i style="background:'+p.hex+'"></i><span>'+p.name+'</span><small>detectada</small>';
+    row.onclick=()=>{cloneSelectedColor=p;$('cloneSelectedTitle').textContent=p.name;$('cloneSelectedMeta').textContent='Cor detectada no PDF. Clique sobre uma linha desta cor para rastrear a conectividade geométrica.';};
+    legend.append(row);
+  });
+  $('cloneStatus').textContent='Clone digital pronto';
+  $('cloneDetail').textContent=vectorCount.toLocaleString('pt-BR')+' operações vetoriais e '+textContent.items.length.toLocaleString('pt-BR')+' textos identificados.';
+  document.querySelector('#cloneBanner .clone-dot').classList.remove('loading');
+  document.querySelector('#cloneBanner .clone-dot').classList.add('ready');
+  ov.onclick=e=>selectCloneAt(e.clientX,e.clientY);
+}
 async function renderReference(){
   const canvas=$('refCanvas');
   try{
+    $('cloneStatus').textContent='Preparando clone vetorial...';
+    $('cloneDetail').textContent='Lendo os objetos do PDF.';
     if(!window.pdfjsLib) throw new Error('PDF.js indisponível');
     window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const pdf=await window.pdfjsLib.getDocument(pdfUrl).promise;
@@ -46,10 +182,13 @@ async function renderReference(){
     pdfPageSize={w:canvas.width,h:canvas.height};
     await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
     applyRefScale();
+    await initializeClone(page);
     await renderPdfBackgrounds();
   }catch(err){
     console.error(err);
-    toast('Não foi possível renderizar o PDF de referência.');
+    $('cloneStatus').textContent='Falha ao preparar clone';
+    $('cloneDetail').textContent='O PDF continua disponível como referência.';
+    toast('Não foi possível preparar o clone interativo deste PDF.');
   }
 }
 function applyRefScale(){
@@ -60,6 +199,10 @@ $('refZoomIn').onclick=()=>{refScale=Math.min(4,refScale+.25);applyRefScale();};
 $('refZoomOut').onclick=()=>{refScale=Math.max(1,refScale-.25);applyRefScale();};
 $('refFit').onclick=()=>{refScale=1;applyRefScale();$('refViewport').scrollTo(0,0);};
 $('refFullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.querySelector('#reference .viewer').requestFullscreen();}catch{toast('Tela cheia não disponível neste navegador.');}};
+$('traceClone').onclick=()=>{if(!cloneSelectedPixels.length){toast('Selecione primeiro uma linha no diagrama.');return;}paintClonePixels(cloneSelectedPixels);toast('Conectividade geométrica destacada. Cruze o resultado com o diagrama antes de validar.');};
+$('animateClone').onclick=()=>runCloneAnimation();
+$('clearClone').onclick=()=>{cloneAnimating=false;cloneSelectedPixels=[];cloneSelectedColor=null;clearCloneOverlay();$('cloneSelectedTitle').textContent='Nenhuma linha selecionada';$('cloneSelectedMeta').textContent='Clique em uma linha colorida no clone para inspecionar.';$('traceClone').disabled=true;$('animateClone').disabled=true;$('clearClone').disabled=true;};
+$('rebuildClone').onclick=()=>renderReference();
 $('openPdf').onclick=()=>$('pdfFile').click();
 $('pdfFile').onchange=async e=>{
   const file=e.target.files[0];if(!file)return;
