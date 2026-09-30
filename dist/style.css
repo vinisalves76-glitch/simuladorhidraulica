@@ -32,3 +32,22 @@
 .demo-note{margin:12px 0 4px;padding:10px 12px;border:1px solid #f2d08a;background:#fff8e8;border-radius:7px}
 .demo-note strong{display:block;font-size:12px;color:#8a5a00;margin-bottom:3px}
 .demo-note span{display:block;font-size:11px;line-height:1.4;color:#7a6848}
+
+.trace-options{display:grid;gap:7px;margin:14px 0 8px;padding:10px 12px;border:1px solid #d9e6ef;background:#f8fbfd;border-radius:7px}
+.trace-options label{display:flex;align-items:center;gap:8px;font-size:12px;color:#47647a;cursor:pointer}
+.trace-options input{width:auto!important;accent-color:#0786b8}
+.sim-mapcanvas{min-width:0}
+#simViewport{height:650px;background:#e8edf3;overflow:auto;position:relative;cursor:grab}
+#simDrawing{position:relative;width:100%;min-width:100%;background:#fff;line-height:0}
+#simCanvas{width:100%;height:auto;display:block;background:#fff}
+#simOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.sim-route{filter:drop-shadow(0 0 1px rgba(255,255,255,.9))}
+.sim-route.active{stroke-dasharray:7 5;animation:simflow .55s linear infinite}
+@keyframes simflow{to{stroke-dashoffset:-24}}
+.simline-status{display:grid;gap:8px;margin:18px 0;padding:12px;border:1px solid #e1e8ef;border-radius:8px;background:#f8fafc}
+.simline-status>div{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;font-size:12px;color:#52697d}
+.simline-status .dot{width:9px;height:9px;border-radius:50%}
+.simline-status .pressure{background:#ef4444}.simline-status .return{background:#0ea5e9}.simline-status .pilot{background:#d946ef}.simline-status .drain{background:#f59e0b}
+.simcontrols .pumpcontrol{margin-top:12px}
+@media(max-width:1050px){#simViewport{height:560px}}
+@media(max-width:760px){#simViewport{height:420px}}
