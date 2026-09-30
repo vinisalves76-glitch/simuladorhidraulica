@@ -19,11 +19,9 @@ let toastTimer;function toast(t){$('toast').textContent=t;$('toast').style.displ
 const MAP_STORAGE_KEY='hidrolab.maps.v1';let mapZoom=100,mapDraft=null,mapLines=[],mapPlayback=false,mapTimer=null,mapPdfReady=false;
 const mapColors={pressure:'#ef4444',return:'#0ea5e9',pilot:'#d946ef',drain:'#f59e0b'};
 const demoMap={
-  name:'Elevação da lança - DEMO NÃO VALIDADO',
+  name:'DEMO DE TRAÇADO - NÃO É UMA FUNÇÃO VALIDADA',
   lines:[
-    {type:'pilot',label:'DEMO - comando piloto (não validado)',points:[{x:245,y:145},{x:315,y:210},{x:430,y:235}]},
-    {type:'pressure',label:'DEMO - alimentação principal (não validada)',points:[{x:220,y:720},{x:360,y:630},{x:500,y:450},{x:620,y:280},{x:775,y:205}]},
-    {type:'return',label:'DEMO - retorno ao tanque (não validado)',points:[{x:780,y:250},{x:675,y:390},{x:570,y:610},{x:455,y:730},{x:310,y:790}]}
+    {type:'pressure',label:'Trecho de demonstração - aderência à linha',points:[{x:430,y:118},{x:430,y:214},{x:492,y:214},{x:492,y:340},{x:548,y:340}]}
   ]
 };
 async function renderFullMapPdf(){
