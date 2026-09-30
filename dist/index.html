@@ -63,13 +63,19 @@
         <p>O Gemini identifica componentes, portas e conexões visíveis. O resultado entra como proposta para validação técnica.</p>
         <button id="analyzeGemini" class="primary wide">✦ Analisar PDF com Gemini</button>
         <div id="aiStatus" class="ai-status">Aguardando análise.</div>
+        <div id="aiSteps" class="ai-steps">
+          <div data-ai-step="inventory"><span>1</span><b>Componentes</b><small>Aguardando</small></div>
+          <div data-ai-step="topology"><span>2</span><b>Conexões</b><small>Aguardando</small></div>
+          <div data-ai-step="functions"><span>3</span><b>Funções</b><small>Aguardando</small></div>
+        </div>
         <div id="aiSummary" class="ai-summary" hidden>
           <div><span>Componentes</span><strong id="aiComponents">0</strong></div>
           <div><span>Conexões</span><strong id="aiConnections">0</strong></div>
           <div><span>Funções</span><strong id="aiFunctions">0</strong></div>
         </div>
         <div id="aiWarnings" class="ai-warnings"></div>
-        <button id="buildAiGraph" class="button wide" disabled>Gerar circuito proposto</button>
+        <button id="buildAiGraph" class="button wide" disabled>Gerar circuito funcional</button>
+        <button id="useLastAnalysis" class="quiet wide" hidden>Usar última análise salva</button>
       </div>
 
       <div class="notice">A IA não valida sozinha o circuito. Conexões incertas ficam marcadas para revisão antes de serem tratadas como modelo técnico oficial.</div>
@@ -153,9 +159,16 @@
         <h2 id="simGraphName">Circuito em desenvolvimento</h2>
         <p class="muted">A simulação usa a mesma posição dos componentes sobre o PDF. Se o circuito ainda não foi montado, nenhuma rota hidráulica será inventada.</p>
         <div class="pumpcontrol"><div><strong>Bomba hidráulica</strong><small id="pumpState">Desligada</small></div><button id="simPump" class="toggle" aria-pressed="false"><span></span></button></div>
-        <label class="controlLabel">Estado da válvula 4/3</label>
-        <div class="commands"><button data-valve-state="extend">P→A<br><span>B→T</span></button><button data-valve-state="neutral" class="chosen">Neutro</button><button data-valve-state="retract">P→B<br><span>A→T</span></button></div>
-        <div class="sim-readout"><div><span>Rede pressurizada</span><strong id="pressureReadout">0</strong></div><div><span>Rede de retorno</span><strong id="returnReadout">0</strong></div></div>
+        <div id="aiFunctionControls" hidden>
+          <label class="controlLabel" for="simFunctionSelect">Função hidráulica</label>
+          <select id="simFunctionSelect"><option value="">Selecione...</option></select>
+          <div class="function-info" id="simFunctionInfo">Selecione uma função reconhecida pela análise.</div>
+        </div>
+        <div id="genericValveControls">
+          <label class="controlLabel">Estado da válvula 4/3</label>
+          <div class="commands"><button data-valve-state="extend">P→A<br><span>B→T</span></button><button data-valve-state="neutral" class="chosen">Neutro</button><button data-valve-state="retract">P→B<br><span>A→T</span></button></div>
+        </div>
+        <div class="sim-readout"><div><span>Trechos ativos</span><strong id="pressureReadout">0</strong></div><div><span>Retornos ativos</span><strong id="returnReadout">0</strong></div></div>
         <button id="backToBuilder" class="quiet wide">Editar circuito</button>
         <div class="notice">Nesta etapa, a simulação é lógica e visual. Ainda não há cálculo de pressão, vazão, perdas, carga ou regulagem de bomba.</div>
       </aside>
