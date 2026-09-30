@@ -16,8 +16,51 @@ function showArea(area){const explore=area==='explore',mapping=area==='mapping',
 function tab(sim){showArea(sim?'sim':'explore');}
 $('exploreTab').onclick=()=>showArea('explore');$('mapTab').onclick=()=>showArea('mapping');$('simTab').onclick=()=>showArea('sim');$('goSim').onclick=()=>showArea('mapping');
 let toastTimer;function toast(t){$('toast').textContent=t;$('toast').style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').style.display='none',5500);}
-const MAP_STORAGE_KEY='hidrolab.maps.v1';let mapZoom=100,mapDraft=null,mapLines=[],mapPlayback=false,mapTimer=null;
+const MAP_STORAGE_KEY='hidrolab.maps.v1';let mapZoom=100,mapDraft=null,mapLines=[],mapPlayback=false,mapTimer=null,mapPdfReady=false;
 const mapColors={pressure:'#ef4444',return:'#0ea5e9',pilot:'#d946ef',drain:'#f59e0b'};
+const demoMap={
+  name:'Elevação da lança - DEMO NÃO VALIDADO',
+  lines:[
+    {type:'pilot',label:'DEMO - comando piloto (não validado)',points:[{x:245,y:145},{x:315,y:210},{x:430,y:235}]},
+    {type:'pressure',label:'DEMO - alimentação principal (não validada)',points:[{x:220,y:720},{x:360,y:630},{x:500,y:450},{x:620,y:280},{x:775,y:205}]},
+    {type:'return',label:'DEMO - retorno ao tanque (não validado)',points:[{x:780,y:250},{x:675,y:390},{x:570,y:610},{x:455,y:730},{x:310,y:790}]}
+  ]
+};
+async function renderFullMapPdf(){
+  const canvas=$('mapCanvas'),fallback=$('mapFallback');
+  if(!canvas)return;
+  try{
+    if(!window.pdfjsLib)throw new Error('PDF.js indisponível');
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf=await window.pdfjsLib.getDocument('sy750h.pdf').promise;
+    const page=await pdf.getPage(1);
+    const base=page.getViewport({scale:1});
+    const targetWidth=2200;
+    const scale=targetWidth/base.width;
+    const viewport=page.getViewport({scale});
+    canvas.width=Math.round(viewport.width);
+    canvas.height=Math.round(viewport.height);
+    canvas.style.aspectRatio=canvas.width+'/'+canvas.height;
+    await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+    fallback.hidden=true;
+    canvas.hidden=false;
+    mapPdfReady=true;
+  }catch(err){
+    canvas.hidden=true;
+    fallback.hidden=false;
+    mapPdfReady=false;
+    console.warn('Falha ao renderizar PDF completo no editor:',err);
+    toast('Não foi possível renderizar o PDF completo. Exibindo a imagem de apoio.');
+  }
+}
+function loadDemoMap(){
+  $('mapName').value=demoMap.name;
+  mapLines=demoMap.lines.map(l=>({...l,points:l.points.map(p=>({...p}))}));
+  mapDraft=null;
+  updateDraftStatus();
+  renderMap();
+}
+
 function setMapZoom(z){mapZoom=Math.max(100,Math.min(400,z));$('mapDrawing').style.width=mapZoom+'%';$('mapZoomLabel').textContent=mapZoom+'%';}
 function mapPoint(e){const rect=$('mapDrawing').getBoundingClientRect();return{x:Math.max(0,Math.min(1000,(e.clientX-rect.left)/rect.width*1000)),y:Math.max(0,Math.min(1000,(e.clientY-rect.top)/rect.height*1000))};}
 function polyline(points){return points.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');}
@@ -34,11 +77,12 @@ function refreshSavedMaps(){const data=savedMapData(),sel=$('savedMaps'),current
 $('saveMap').onclick=()=>{const name=$('mapName').value.trim();if(!name){toast('Digite o nome da função antes de salvar.');return;}if(!mapLines.length){toast('Adicione ao menos uma linha ao mapa.');return;}const data=savedMapData();data[name]={name,lines:mapLines,updatedAt:new Date().toISOString(),source:'SY750H PRO - diagrama fornecido pelo usuário'};localStorage.setItem(MAP_STORAGE_KEY,JSON.stringify(data));refreshSavedMaps();$('savedMaps').value=name;toast('Função salva neste navegador.');};
 $('loadMap').onclick=()=>{const name=$('savedMaps').value,data=savedMapData();if(!name||!data[name])return;$('mapName').value=data[name].name||name;mapLines=Array.isArray(data[name].lines)?data[name].lines:[];mapDraft=null;updateDraftStatus();renderMap();toast('Mapa carregado.');};
 $('deleteMap').onclick=()=>{const name=$('savedMaps').value;if(!name)return;const data=savedMapData();delete data[name];localStorage.setItem(MAP_STORAGE_KEY,JSON.stringify(data));mapLines=[];$('mapName').value='';refreshSavedMaps();renderMap();toast('Mapa excluído deste navegador.');};
+$('loadDemo').onclick=()=>{loadDemoMap();toast('Demonstração não validada carregada para teste visual.');};
 $('playMap').onclick=()=>{if(!mapLines.length){toast('Crie ou carregue um mapa antes de reproduzir.');return;}mapPlayback=true;renderMap();clearTimeout(mapTimer);mapTimer=setTimeout(()=>{mapPlayback=false;renderMap();},12000);};
 $('stopMap').onclick=()=>{mapPlayback=false;clearTimeout(mapTimer);renderMap();};
 $('exportMaps').onclick=()=>{const data=JSON.stringify({format:'HidroLabMapV1',exportedAt:new Date().toISOString(),maps:savedMapData()},null,2),blob=new Blob([data],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='hidrolab-mapeamentos.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),500);};
 $('importMaps').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const parsed=JSON.parse(await f.text()),incoming=parsed.maps||parsed;if(!incoming||typeof incoming!=='object'||Array.isArray(incoming))throw new Error('invalid');const merged={...savedMapData(),...incoming};localStorage.setItem(MAP_STORAGE_KEY,JSON.stringify(merged));refreshSavedMaps();toast('Mapeamentos importados.');}catch{toast('Arquivo de mapeamento inválido.');}e.target.value='';};
-setMapZoom(100);refreshSavedMaps();updateDraftStatus();
+setMapZoom(100);refreshSavedMaps();updateDraftStatus();renderFullMapPdf().then(()=>{loadDemoMap();});
 
 $('pdfFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;if(f.size>40*1024*1024){toast('Escolha um PDF de até 40 MB.');return;}const signature=await f.slice(0,5).text();if(signature!=='%PDF-'){toast('O arquivo selecionado não é um PDF válido.');return;}if(blobURL)URL.revokeObjectURL(blobURL);blobURL=URL.createObjectURL(f);custom=true;$('drawing').hidden=true;$('pdfViewer').hidden=false;$('pdfViewer').src=blobURL;$('filename').textContent=f.name;$('docmeta').textContent='PDF local · aberto somente neste navegador';$('restore').hidden=false;$('componentList').hidden=true;document.querySelector('.detail').hidden=true;$('goSim').textContent='Abrir simulação genérica';$('viewerHint').textContent='Use os controles do leitor de PDF para navegar';document.querySelector('.viewerfoot a').href=blobURL;['zoomIn','zoomOut','fit'].forEach(id=>$(id).disabled=true);showArea('explore');toast('PDF aberto para consulta. O editor de mapeamento continua vinculado ao esquema SY750H original.');};
 $('restore').onclick=()=>{custom=false;$('drawing').hidden=false;$('pdfViewer').hidden=true;$('pdfViewer').removeAttribute('src');if(blobURL)URL.revokeObjectURL(blobURL);blobURL=null;$('filename').textContent='SY750H PRO';$('docmeta').textContent='Esquema hidráulico · 1 página';$('restore').hidden=true;$('componentList').hidden=false;document.querySelector('.detail').hidden=false;$('goSim').textContent='Experimentar a simulação';$('viewerHint').textContent='Arraste para navegar · Use + e − para ampliar';document.querySelector('.viewerfoot a').href='sy750h.pdf';['zoomIn','zoomOut','fit'].forEach(id=>$(id).disabled=false);$('pdfFile').value='';setZoom(100);};
