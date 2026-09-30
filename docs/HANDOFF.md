@@ -159,3 +159,43 @@ Este protótipo ainda não afirma que uma rede geometricamente conectada corresp
 Substituir o rastreamento puramente geométrico por um grafo vetorial do PDF:
 `segmento -> nó/junção -> porta -> componente`.
 Depois associar estados internos de válvulas e comandos para que o fluxo siga automaticamente somente caminhos hidraulicamente válidos.
+
+
+## Integração Gemini - análise automática de diagrama (30/09/2026)
+Foi criada integração server-side com a Gemini API para interpretar o PDF hidráulico e gerar uma proposta de grafo.
+
+### Segurança
+- A chave não fica no JavaScript do navegador nem no GitHub.
+- O endpoint usa a variável de ambiente `GEMINI_API_KEY` na Vercel.
+- Modelo padrão: `gemini-2.5-flash`; pode ser sobrescrito por `GEMINI_MODEL`.
+
+### Endpoint
+- `/api/analisar-diagrama`
+- GET informa se a chave está configurada.
+- POST envia o PDF padrão `sy750h.pdf` ao Gemini e solicita JSON estruturado.
+
+### Saída solicitada ao Gemini
+- componentes;
+- tipo de componente;
+- bbox normalizado;
+- portas;
+- conexões;
+- tipo de linha;
+- funções hidráulicas;
+- confidence;
+- needsValidation;
+- evidências e warnings.
+
+### Interface
+A aba Clone digital ganhou:
+- botão **Analisar PDF com Gemini**;
+- status da análise;
+- contadores de componentes/conexões/funções;
+- avisos;
+- botão **Gerar circuito proposto**.
+
+O circuito proposto é montado no editor a partir do JSON da IA. Componentes não suportados pela biblioteca visual entram como componente genérico, preservando nome/portas detectadas. Nada retornado pela IA é tratado como validado automaticamente.
+
+### Verificação
+O endpoint foi publicado e testado via GET. Antes da configuração da chave retorna:
+`{"configured":false,"model":"gemini-2.5-flash"}`.
