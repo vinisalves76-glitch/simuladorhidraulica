@@ -65,14 +65,16 @@
 
       <div class="editor-card">
         <div class="toolbar editor-toolbar">
-          <div><strong>Editor de circuito</strong><span class="desktop"> · componentes + portas + conexões</span></div>
-          <div class="tools"><button id="builderFit">Centralizar</button><button id="builderClear">Limpar</button><button id="loadDemoGraph">Carregar demo</button></div>
+          <div><strong>Editor de circuito sobre o PDF</strong><span class="desktop"> · posicione os componentes sobre os símbolos do diagrama</span></div>
+          <div class="tools"><button id="togglePdfBg">Ocultar PDF</button><button id="builderFit">Centralizar</button><button id="builderClear">Limpar</button><button id="loadDemoGraph">Demo genérica</button></div>
         </div>
-        <div id="circuitEditor">
+        <div class="pdf-work-note"><strong>PDF carregado como gabarito técnico.</strong> O editor não cria uma topologia sozinho: coloque os componentes sobre o desenho e conecte as portas seguindo exatamente as linhas do esquema.</div>
+        <div class="editor-scroll"><div id="circuitEditor">
+          <canvas id="builderPdfCanvas" class="pdf-background" aria-label="PDF de referência ao fundo do editor"></canvas>
           <svg id="wireLayer" aria-label="Conexões hidráulicas"></svg>
           <div id="nodeLayer"></div>
-          <div class="empty-editor" id="emptyEditor"><strong>Comece pelo componente.</strong><span>Use a biblioteca à esquerda ou carregue o circuito de demonstração.</span></div>
-        </div>
+          <div class="empty-editor" id="emptyEditor"><strong>PDF pronto para rastreamento.</strong><span>Adicione um componente da biblioteca e posicione-o sobre o símbolo correspondente.</span></div>
+        </div></div>
         <div class="editor-status"><span id="connectStatus">Selecione uma porta para iniciar uma conexão.</span><span id="graphStats">0 componentes · 0 conexões</span></div>
       </div>
 
@@ -114,14 +116,14 @@
   <section id="simulation" hidden>
     <div class="sim-shell">
       <div class="sim-card">
-        <div class="toolbar"><div><strong>Simulação do circuito montado</strong><span class="desktop"> · fluxo calculado pela topologia</span></div><div class="tools"><button id="simFit">Centralizar</button></div></div>
-        <div id="simEditor"><svg id="simWireLayer"></svg><div id="simNodeLayer"></div></div>
+        <div class="toolbar"><div><strong>Simulação do circuito montado</strong><span class="desktop"> · mesmo PDF, mesmos componentes e mesmas conexões</span></div><div class="tools"><button id="toggleSimPdf">Ocultar PDF</button><button id="simFit">Centralizar</button></div></div>
+        <div class="editor-scroll"><div id="simEditor"><canvas id="simPdfCanvas" class="pdf-background" aria-label="PDF de referência ao fundo da simulação"></canvas><svg id="simWireLayer"></svg><div id="simNodeLayer"></div></div></div>
         <div class="sim-legend"><span><i class="red"></i>Alimentação pressurizada</span><span><i class="blue"></i>Retorno ao tanque</span><span><i class="gray"></i>Sem fluxo ativo</span></div>
       </div>
       <aside class="sim-panel">
         <div class="section-label">BANCADA LÓGICA</div>
         <h2 id="simGraphName">Circuito em desenvolvimento</h2>
-        <p class="muted">A simulação percorre as conexões existentes e as ligações internas da válvula direcional.</p>
+        <p class="muted">A simulação usa a mesma posição dos componentes sobre o PDF. Se o circuito ainda não foi montado, nenhuma rota hidráulica será inventada.</p>
         <div class="pumpcontrol"><div><strong>Bomba hidráulica</strong><small id="pumpState">Desligada</small></div><button id="simPump" class="toggle" aria-pressed="false"><span></span></button></div>
         <label class="controlLabel">Estado da válvula 4/3</label>
         <div class="commands"><button data-valve-state="extend">P→A<br><span>B→T</span></button><button data-valve-state="neutral" class="chosen">Neutro</button><button data-valve-state="retract">P→B<br><span>A→T</span></button></div>
