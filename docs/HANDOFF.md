@@ -120,3 +120,19 @@ Ainda não são calculados pressão, vazão, perdas, carga, dinâmica de carrete
 
 ### Deploy
 A branch `feature/mapeamento-funcional` gera preview automática na Vercel. Último commit funcional do Editor V2: `738671d`.
+
+
+## Correção - PDF como base visual do editor (30/09/2026)
+Foi identificado que o Editor V2 ainda podia mostrar apenas o circuito genérico, sem manter o PDF real visível durante a montagem/simulação.
+
+### Correções aplicadas
+- O PDF agora é renderizado também como plano de fundo da aba **Montar circuito**.
+- O mesmo PDF é renderizado como plano de fundo da aba **Simular circuito**.
+- Componentes e conexões ficam em camadas sobre o PDF, permitindo reconstruir o circuito exatamente sobre o diagrama.
+- Foi removido o carregamento automático da demo genérica na inicialização.
+- A demo permanece apenas como ação manual para teste.
+- Editor e simulador passaram a usar a mesma escala e coordenadas, corrigindo a distorção em que os componentes apareciam comprimidos no canto superior esquerdo.
+- Foram adicionados controles para ocultar/mostrar o PDF no editor e na simulação.
+
+### Regra técnica
+O PDF funciona como gabarito visual, não como fonte automática de topologia. O usuário posiciona componentes sobre os símbolos correspondentes e conecta porta a porta conforme a documentação validada.
