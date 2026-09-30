@@ -10,42 +10,55 @@
 <body>
 <header>
   <div class="brand"><span class="brandmark">H</span><div>Hidro<span>Lab</span><small>LABORATÓRIO HIDRÁULICO</small></div></div>
-  <div class="header-right"><span class="pill">EDITOR V2</span><button class="button dark" id="openPdf">+ Abrir PDF</button><input hidden type="file" id="pdfFile" accept="application/pdf"></div>
+  <div class="header-right"><span class="pill">CLONE V3</span><button class="button dark" id="openPdf">+ Abrir PDF</button><input hidden type="file" id="pdfFile" accept="application/pdf"></div>
 </header>
 
 <main>
   <div class="intro">
-    <div><span class="eyebrow">MÁQUINAS PESADAS / TREINAMENTO</span><h1>Do diagrama ao circuito simulável.</h1><p>Use o PDF como referência, monte o circuito com componentes e siga o fluxo pelas próprias linhas de conexão.</p></div>
+    <div><span class="eyebrow">MÁQUINAS PESADAS / TREINAMENTO</span><h1>Do PDF ao circuito digital interativo.</h1><p>O HidroLab converte o PDF vetorial em um clone SVG interativo, preservando o desenho original e tornando as linhas clicáveis.</p></div>
     <div class="document"><span class="docicon">PDF</span><div><strong id="filename">SY750H PRO</strong><small id="docmeta">Referência técnica carregada</small></div></div>
   </div>
 
   <div class="tabs" role="tablist" aria-label="Área de trabalho">
-    <button id="referenceTab" class="tab active" role="tab" aria-selected="true">01 <span>Referência PDF</span></button>
+    <button id="referenceTab" class="tab active" role="tab" aria-selected="true">01 <span>Clone digital</span></button>
     <button id="builderTab" class="tab" role="tab" aria-selected="false">02 <span>Montar circuito</span></button>
     <button id="simTab" class="tab" role="tab" aria-selected="false">03 <span>Simular circuito</span></button>
   </div>
 
   <section id="reference" class="reference-layout">
-    <div class="viewer">
+    <div class="viewer clone-viewer">
       <div class="toolbar">
-        <div><strong id="referenceTitle">Diagrama original SY750H PRO</strong><span class="desktop"> · referência para reconstrução do circuito</span></div>
+        <div><strong id="referenceTitle">Clone digital - SY750H PRO</strong><span class="desktop"> · SVG vetorial gerado diretamente do PDF</span></div>
         <div class="tools"><button id="refZoomOut">-</button><output id="refZoomLabel">100%</output><button id="refZoomIn">+</button><button id="refFit">Ajustar</button><button id="refFullscreen">Tela cheia</button></div>
       </div>
-      <div id="refViewport"><div id="refDrawing"><canvas id="refCanvas"></canvas></div></div>
-      <div class="viewerfoot"><span>O PDF é a referência. O circuito simulável é construído na aba 02.</span><a href="sy750h.pdf" target="_blank" rel="noopener">Abrir PDF original ↗</a></div>
+      <div id="cloneBanner" class="clone-banner"><span class="clone-dot loading"></span><strong id="cloneStatus">Preparando clone vetorial...</strong><span id="cloneDetail">Lendo os objetos do PDF.</span></div>
+      <div id="refViewport"><div id="refDrawing"><canvas id="refCanvas"></canvas><div id="cloneSvgHost" hidden></div></div></div>
+      <div class="viewerfoot"><span>Clique em uma linha colorida do esquema para selecioná-la.</span><a href="sy750h.pdf" target="_blank" rel="noopener">Abrir PDF original ↗</a></div>
     </div>
-    <aside>
-      <div class="section-label">MÉTODO DE TRABALHO</div>
-      <h2>Reconstruir sem inventar</h2>
-      <div class="step-list">
-        <div><b>1</b><span>Identifique o componente no PDF.</span></div>
-        <div><b>2</b><span>Adicione o componente equivalente no editor.</span></div>
-        <div><b>3</b><span>Conecte porta com porta seguindo a linha original.</span></div>
-        <div><b>4</b><span>Valide o caminho antes de salvar como circuito técnico.</span></div>
-        <div><b>5</b><span>Simule somente a topologia construída.</span></div>
+    <aside class="clone-panel">
+      <div class="section-label">CLONE AUTOMÁTICO DO PDF</div>
+      <h2>Diagrama convertido em objetos</h2>
+      <p class="muted">O desenho visual permanece idêntico ao PDF. O sistema tenta transformar os vetores originais em elementos clicáveis sem redesenhar o circuito.</p>
+
+      <div class="clone-metrics">
+        <div><span>Objetos interativos</span><strong id="cloneObjectCount">0</strong></div>
+        <div><span>Textos detectados</span><strong id="cloneTextCount">0</strong></div>
       </div>
-      <div class="notice">O HidroLab não interpreta automaticamente uma conexão apenas porque duas linhas parecem se cruzar no PDF. A topologia precisa ser confirmada.</div>
-      <button id="goBuilder" class="primary wide">Montar circuito a partir deste PDF</button>
+
+      <div class="section-head"><strong>Cores / redes detectadas</strong><span id="cloneColorCount">0</span></div>
+      <div id="cloneLegend" class="clone-legend"><span class="muted">Aguardando conversão...</span></div>
+
+      <div class="selected-panel clone-selected-panel">
+        <strong id="cloneSelectedTitle">Nenhuma linha selecionada</strong>
+        <p id="cloneSelectedMeta">Clique em uma linha colorida no clone para inspecionar.</p>
+      </div>
+
+      <div class="two-actions"><button id="traceClone" disabled>Rastrear conexão</button><button id="animateClone" disabled>Animar fluxo</button></div>
+      <button id="clearClone" class="button wide" disabled>Limpar seleção</button>
+      <button id="rebuildClone" class="button wide">↺ Regerar clone do PDF</button>
+
+      <div class="notice">Nesta versão de teste, o HidroLab clona o desenho vetorial e detecta automaticamente linhas por cor/conectividade geométrica. Cruzamentos, junções e lógica interna de válvulas ainda precisam de validação técnica antes de virarem uma simulação oficial.</div>
+      <button id="goBuilder" class="quiet wide">Abrir editor manual de validação</button>
     </aside>
   </section>
 
