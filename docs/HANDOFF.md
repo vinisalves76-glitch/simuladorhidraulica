@@ -48,3 +48,11 @@ O HidroLab não infere nem cria automaticamente portas, trajetos ou valores téc
 
 ### Próximo passo
 Usar o editor junto com o instrutor para mapear uma função completa da SY750H, começando por uma função claramente identificada no diagrama (por exemplo BOOM, BUCKET ou ARM), registrando: comando piloto -> carretel correspondente -> alimentação principal -> atuador -> retorno.
+
+
+### Ajuste de visualização e mapa de demonstração
+- Corrigida a área de mapeamento para renderizar a página completa do PDF `sy750h.pdf` com PDF.js, evitando depender da imagem PNG recortada.
+- Mantido `schema.png` apenas como fallback caso a renderização do PDF falhe.
+- Adicionado um mapeamento DEMO, explicitamente marcado como **não validado**, para testar criação de linhas, animação de fluxo, salvamento e interface.
+- Adicionado botão para recarregar a demonstração.
+- O mapa demo é somente visual e não deve ser usado como referência técnica da SY750H.
