@@ -136,3 +136,26 @@ Foi identificado que o Editor V2 ainda podia mostrar apenas o circuito genérico
 
 ### Regra técnica
 O PDF funciona como gabarito visual, não como fonte automática de topologia. O usuário posiciona componentes sobre os símbolos correspondentes e conecta porta a porta conforme a documentação validada.
+
+
+## Clone V3 - teste de clonagem automática do PDF (30/09/2026)
+Foi adicionada uma terceira abordagem para validar a ideia de transformar o próprio diagrama em interface interativa.
+
+### O que esta versão faz
+- Mantém a renderização visual integral do PDF SY750H como base do clone.
+- Usa a estrutura do PDF.js para contar operações vetoriais e textos detectados.
+- Analisa os pixels renderizados para detectar as redes coloridas presentes no esquema.
+- Adiciona uma camada interativa exatamente sobre o desenho original.
+- Permite clicar diretamente em uma linha colorida do PDF.
+- A partir do ponto clicado, rastreia pixels geometricamente conectados da mesma rede/cor.
+- Destaca a conexão detectada sem redesenhar o circuito manualmente.
+- Possui animação de propagação do destaque a partir do ponto selecionado, servindo como prova de conceito para fluxo nas próprias linhas do diagrama.
+- Mostra as cores/redes detectadas automaticamente e métricas de objetos/textos do PDF.
+
+### Importante
+Este protótipo ainda não afirma que uma rede geometricamente conectada corresponde a uma função hidráulica validada. Cruzamentos, pontos de junção, referências de continuidade e caminhos internos de válvulas exigem tratamento topológico e validação técnica. O objetivo do Clone V3 é provar que é possível manter o desenho idêntico ao PDF e interagir diretamente com as linhas originais, evitando reconstrução visual manual.
+
+### Próxima evolução
+Substituir o rastreamento puramente geométrico por um grafo vetorial do PDF:
+`segmento -> nó/junção -> porta -> componente`.
+Depois associar estados internos de válvulas e comandos para que o fluxo siga automaticamente somente caminhos hidraulicamente válidos.
