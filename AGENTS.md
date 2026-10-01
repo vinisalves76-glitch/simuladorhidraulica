@@ -9,3 +9,7 @@
 7. Em melhorias posteriores, trabalhe em branch própria e descreva o impacto antes de levar alterações à main. A main poderá disparar publicação na Vercel.
 8. Atualize docs/HANDOFF.md ao concluir: mudanças, arquivos relevantes, verificações, limitações e próximo passo. Atualize README quando mudar a configuração.
 9. Registre somente verificações realmente executadas. Nunca salve tokens, senhas ou credenciais no repositório.
+
+
+10. Para continuidade por outra IA/agente, leia também docs/ASTRA_START_HERE.md e docs/PLANO_CLONE_1A1.md antes de implementar mudanças estruturais.
+11. A direção principal atual é clone visual 1:1 do PDF -> IDs visuais estáveis -> semântica -> topologia -> simulação sobre os próprios vetores originais. Não volte ao redesenho genérico como arquitetura principal.
