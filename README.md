@@ -36,3 +36,15 @@ Na raiz: `python3 -m http.server 8080 --directory dist`. Abra `http://localhost:
 - `docs/HANDOFF.md`: estado atual e próximos passos.
 
 Os arquivos PDF e PNG incluídos ficam acessíveis aos visitantes da hospedagem e do repositório público. PDFs abertos pelo botão da interface ficam somente na sessão local do navegador.
+
+
+## Direção atual do desenvolvimento
+
+A arquitetura alvo mudou: o HidroLab deve preservar o diagrama original e convertê-lo em um **clone digital interativo 1:1**, em vez de redesenhar o circuito com símbolos genéricos.
+
+Para qualquer IA ou desenvolvedor que continue o projeto, leia primeiro:
+- `docs/ASTRA_START_HERE.md`
+- `docs/PLANO_CLONE_1A1.md`
+- `docs/HANDOFF.md`
+
+A prioridade imediata é: **PDF -> cena vetorial interativa com IDs estáveis**, antes de avançar para reconhecimento semântico, topologia hidráulica e simulação.
